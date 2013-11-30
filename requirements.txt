@@ -1,0 +1,4 @@
+-e git+https://github.com/mahmoud/clastic.git#egg=clastic
+
+Twisted==13.0.0
+autobahn==0.5.14

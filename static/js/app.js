@@ -1,9 +1,9 @@
 
-  var DEFAULT_EXPIRE = 3600000;
+  var DEFAULT_EXPIRE = 7200000;
   var DEFAULT_THRESH = 2;
   var REFRESH_RATE = 10;
   var KEEP = 2000; // ?
-  var LIST_LIMIT = 11;
+  var LIST_LIMIT = 20;
   var WP_API_URL = 'https://en.wikipedia.org/w/api.php'
   var BOOTUP_API_URL = 'http://wikimedia-foundation-2.local:5000/recent/?callback=?';
   var change_templ;
@@ -29,6 +29,22 @@
     this.user = 'User:' + data['user'];
     // parse out date
     this.date = Date.now();
+    this.is_revert = function() {
+      var summary = data['summary'] ? data['summary'].toLowerCase() : '';
+      if (summary.indexOf('revert') > -1) {
+        return true;
+      }
+      if (summary.indexOf('undo') > -1) {
+        return true;
+      }
+      if (summary.indexOf('undid') > -1) {
+        return true;
+      }
+      if (summary.indexOf('rv ') == 0) {
+        return true;
+      }
+      return false
+    }
     if ('recv_time' in data) {
       var epoch_temp = new Date(0);
       this.date = epoch_temp.setUTCSeconds(data['recv_time']);
@@ -182,6 +198,9 @@
         stats_list
           .append('li')
           .html('New edits: ' + d['new_edits']);
+        stats_list
+          .append('li')
+          .html('Reverts: ' + d['reverts']);
       });
     edit_item.exit()
       .transition()
@@ -261,16 +280,16 @@
               'edits': cur_user,
               'size': cur_user.reduce(function (a, b) {
                 var size = Math.abs(b['data']['change_size'])
-                if (b['data']['ns'] != 'Main') {
-                  //only count main ns
+                if (b['data']['ns'] != 'Main' || b.is_revert()) {
+                  //only count main ns and no reverts
                   size = 0;
                 }
                 return a + size;
               }, 0),
               'size_rel': cur_user.reduce(function (a, b) {
                 var size_rel = Math.abs(b['data']['change_size']) * b.decayed();
-                if (b['data']['ns'] != 'Main') {
-                  //only count main ns
+                if (b['data']['ns'] != 'Main' || b.is_revert()) {
+                  //only count main ns and no reverts
                   size_rel = 0;
                 }
                 return a + size_rel;
@@ -281,6 +300,9 @@
               'new_edits': cur_user.filter(function(rev) {
                 return rev['data']['is_bot'] === true;
               }).length,
+              'reverts': cur_user.filter(function(rev) {
+                return rev.is_revert();
+              }).length
             }
             this.interesting['by_user'].push(ret)
           }

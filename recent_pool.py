@@ -14,16 +14,28 @@ from twisted.python import log
 from twisted.web.server import Site
 from twisted.application import internet, service
 
-from clastic import Application, render_basic
+from clastic import Application
+from clastic.render import JSONPRender
 
 
 DEFAULT_WEBSOCKET = 'ws://wikimon.hatnote.com:9000'
 DEFAULT_WINDOW = 120
-MAX_ITEM_COUNT = 8
+MAX_ITEM_COUNT = 300
 
-ALL_THINGS = deque()
+EDIT_POOL = deque()
 
-app = Application([('/', lambda: pformat(list(ALL_THINGS)), render_basic)])
+
+def get_recent(edit_pool, count=None):
+    return list(edit_pool)
+
+def create_app():
+    render_jsonp = JSONPRender()
+    routes = [('/recent', get_recent, render_jsonp)]
+    resources = {'edit_pool': EDIT_POOL}
+    return Application(routes, resources)
+
+
+app = create_app()
 
 
 class RecordClientProtocol(WebSocketClientProtocol):
@@ -31,13 +43,13 @@ class RecordClientProtocol(WebSocketClientProtocol):
         try:
             msg = json.loads(msg)
         except ValueError:
-            return  # it's not a revision message
+            return
         cur_time = time.time()
         msg['recv_time'] = cur_time
-        ALL_THINGS.append(msg)
-        #while (cur_time - ALL_THINGS[0]['recv_time']) > DEFAULT_WINDOW:
-        while len(ALL_THINGS) > MAX_ITEM_COUNT:
-            ALL_THINGS.popleft()
+        EDIT_POOL.append(msg)
+        #while (cur_time - EDIT_POOL[0]['recv_time']) > DEFAULT_WINDOW:
+        while len(EDIT_POOL) > MAX_ITEM_COUNT:
+            EDIT_POOL.popleft()
         log.msg(msg)
 
 

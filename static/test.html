@@ -1,0 +1,219 @@
+<html>
+<head>
+	<title></title>
+	<script src="js/jquery-1.9.1.min.js"></script>
+	<script src="js/d3.min.js"></script>
+	<script src="js/reconnecting-websocket.min.js" type="text/javascript"></script>
+	<script src="js/leanModal.js" type="text/javascript"></script>
+	<script src="js/app.js" type="text/javascript"></script>
+	<style>
+body {
+	line-height: 1.5em;
+}
+h1, h2, h3 {
+	font-family: "PT Sans", sans-serif;
+}
+h2 span.note {
+	font-size: 0.5em;
+	color: #ccc;
+	margin: 0;
+	line-height: 1em;
+	font-weight: normal;
+}
+h2 span.note:before {
+	content: '\A';
+	white-space: pre;
+}
+.item-action {
+	cursor: pointer;
+	padding: 0 0.2em;
+	margin: 0.5em;
+	border: 1px solid #ddd;
+	border-radius: 5px;
+}
+.item-action:hover {
+	background-color: #fff;
+	color: #dd1144;
+}
+.item-stats {
+	font-size: 0.8em;
+	line-height: 1em;
+}
+.item-user {
+	color: blue;
+}
+.items > li {
+	overflow:hidden;
+	list-style: none;
+	padding: 0.5em;
+	margin-bottom: 0.5em;
+	background: #f9f9f9;
+	width: 100%;
+}
+.contents {
+	width: 900px;
+	margin: auto;
+	border-top: 1px solid #F9F9F9;
+}
+.col {
+	width: 300px;
+}
+.main {
+	width: 600px;
+	margin-left: 150px;
+}
+.main h2 {
+	margin-left: 150px;
+}
+.secondary {
+	border-top: 1px solid #eee;
+	border-bottom: 1px solid #eee;
+	background: #F9F9F9;
+}
+.left {
+	
+	float: left;
+}
+.right {
+	
+	float: right;
+}
+.middle {
+	margin-left: 300px;
+
+}
+
+<!-- box -->
+
+#award {
+	width: 20em;
+}
+label {
+	margin: 1.5em;
+	vertical-align: top;
+}
+.submit {
+	border: 1px solid #ccc;
+	padding: 0.5em 1em;
+}
+.submit:hover {
+	background-color: yellow;
+}
+#lean_overlay {
+    position: fixed;
+    z-index:100;
+    top: 0px;
+    left: 0px;
+    height:100%;
+    width:100%;
+    background: #000;
+    display: none;
+}
+.lean_box { 
+	width: 600px;
+	display:none;
+	background: #FFF;
+	border-radius: 5px; 
+	-moz-border-radius: 5px; 
+	-webkit-border-radius: 5px;
+	box-shadow: 0px 0px 4px rgba(0,0,0,0.7); 
+	-webkit-box-shadow: 0 0 4px rgba(0,0,0,0.7); 
+	-moz-box-shadow: 0 0px 4px rgba(0,0,0,0.7);
+}
+.lean_box p, h3 {
+	padding: 0 1.5em;
+}
+.lean_box h2 {
+	color: #2f6fab;
+	border-radius: 5px 5px 0 0; 
+	margin: 0;
+	padding: 1em;
+	background: ;
+	border-bottom: 1px solid #2f6fab;
+}
+.lean_box-form {
+	background: rgb(248, 248, 248);
+	border-top: 1px solid #d8e6ec;
+	color: #000;
+	border-radius: 0 0 5px 5px; 
+}
+
+	</style>
+</head>
+<body>
+<div class="contents">
+	<h1>Building Wikipedia</h1>
+	<div class="main">
+		<h2>Main stage
+			<span class="note">more details</span></h2>
+		<ul class="items" id="highlights"></ul>
+	</div>
+</div>
+<div class="secondary">
+	<div class="contents">
+		<div class="col left">
+			<h2>Wiki gnomes</h2>
+			<ul class="items" id="minor-edits"></ul>
+		</div>
+		<div class="col right">
+			<h2>Vandal fighters</h2>
+			<ul class="items" id="vandal-fighters"></ul>
+		</div>
+		<div class="col middle">
+			<h2>Big contributors</h2>
+			<ul class="items" id="substantial"></ul>
+		</div>
+		<div style="clear: both">
+		.
+		</div>
+	</div>
+</div>
+<div class="contents">
+	<div class="final">
+		<h2>More edits
+			<span class="note">more details</span></h2>
+		<ul class="items" id="edits">
+		</ul>
+	</div>
+</div>
+<br/>
+<br/>
+<br/>
+<div class="secondary">
+	<div class="contents">
+		<h2>Meta</h2>
+		<ul id="meta">
+			<li>Active: <span id="meta-active">--</span></li>
+			<li>Total: <span id="meta-total">--</span></li>
+			<li>Activity score: <span id="meta-score">--</span></li>
+		</ul>
+	</div>
+</div>
+<div id="modal-template">
+	<h2>---</h2>
+	<ul>
+		<li>Recently made <span class="count">--</span> edits</li>
+		<li>Contributions include: <span class="recent-list">--</span></li>
+		<li><strong><span class="edit-count">--</span></strong> total edits</li>
+		<li>Joined Wikipedia on <strong><span class="join-date">--</span></strong></li>
+		<li>Visit <a href="#" target="_blank"><span class="username">---</span>'s userpage</a></li>
+	</ul>
+	<div class="lean_box-form">
+	<h3>Barnstars</h3>
+	<p><label for="award">Give barnstar:</label>
+		<select name="award" id="award">
+			<option>classic</option>
+			<option>special</option>
+		</select>
+	</p>
+	<p>
+		<label for="message">Message:</label>
+		<textarea name="message" id="message" cols="35"></textarea>
+	</p>
+	<p class='center'>
+		<span class="submit">post</span>
+	</p>
+	</div>
+</div>
+</body>
+</html>

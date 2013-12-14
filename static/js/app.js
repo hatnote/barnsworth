@@ -129,14 +129,12 @@
       .leanModal();
   }
 
-  function update(data) {
-    data = data.slice(0, LIST_LIMIT);
-    var edit_item = d3.select('#edits').selectAll('div.item')
+  function update(selector, data, limit) {
+    limit = limit ? limit : LIST_LIMIT;
+    data = data.slice(0, limit);
+    var edit_item = d3.select(selector).selectAll('.item')
       .data(data, function(d) {
-        if (d) {
-          return [d['username'], d['score']];
-        }
-        return d;
+        return d['username'];
       });
 
     edit_item
@@ -148,23 +146,31 @@
           .attr('href', 'https://' + d['edits'][num - 1].wid + '.wikipedia.org/wiki/' + d['edits'][num - 1].title)
           .text(d['edits'][num - 1].title);
         cur_item.select('span.count').html(num);
-        cur_item.select('li.score').html(d['score'])
-        cur_item.select('.item_click')
+        cur_item.select('span.score').html(d['score']);
+        cur_item.select('span.size').html(d['size']);
+        cur_item.select('span.size-rel').html(d['size_rel']);
+        cur_item.select('span.minor-edits').html(d['minor_edits']);
+        cur_item.select('span.new-edits').html(d['new_edits']);
+        cur_item.select('span.reverts').html(d['reverts']);
+        cur_item.select('.item-action')
           .on('click', modal_click);
-      })
+      });
     item_enter = edit_item
       .order()
       .enter()
-      .append('div')
-      .attr('class', 'item');
-    item_enter
-      .append('p')
-      .attr('class', 'item-user')
-      .text(function(d) {
-        return  d['username'].replace('User:', '');
+      .append('li')
+      .attr('class', 'item')
+      .each(function(d, i) {
+        //console.log('entering ', d)
       });
     item_enter
-      .append('p')
+      .append('span')
+      .attr('class', 'item-user')
+      .text(function(d) {
+        return  d['username'].replace('User:', '') + ' ';
+      });
+    item_enter
+      .append('span')
       .attr('class', 'item-action')
       .text(function(d) {
         return 'Give barnstar';
@@ -188,22 +194,21 @@
         stats_list
           .append('li')
           .attr('class', 'score')
-          .html('Score: ' + d['score']);
+          .html('Score: <span class="score">' + d['score'] + '</span>');
         stats_list
           .append('li')
-          .html('Size: ' + d['size'] + ' (' + d['size_rel'] + ')');
+          .html('Size: <span class="size">' + d['size'] + '</span> (<span class="size-rel">' + d['size_rel'] + '</span>)');
         stats_list
           .append('li')
-          .html('Minor edits: ' + d['minor_edits']);
+          .html('Minor edits: <span class="minor-edits">' + d['minor_edits'] + '</span>');
         stats_list
           .append('li')
-          .html('New edits: ' + d['new_edits']);
+          .html('New edits: <span class="new-edits">' + d['new_edits'] + '</span>');
         stats_list
           .append('li')
-          .html('Reverts: ' + d['reverts']);
+          .html('Reverts: <span class="reverts">' + d['reverts'] + '</span>');
       });
     edit_item.exit()
-      .transition()
       .remove();
   }
 
@@ -318,6 +323,28 @@
     }
   }
 
+  function multi_updater(data) {
+    update('#edits', data);
+    var gnomes = data.filter(function(d) {
+      return d['minor_edits'] > 1;
+    }).sort(function(a, b) {
+      return b['minor_edits'] - a['minor_edits'];
+    });
+    update('#minor-edits', gnomes, 3);
+    var substantial = data.sort(function(a, b) {
+      return b['size_rel'] - a['size_rel'];
+    })
+    update('#substantial', substantial, 3);
+    var vandal_fighters = data.filter(function(d) {
+      return d['reverts'] > 1;
+    }).sort(function(a, b) {
+      return b['reverts'] - a['reverts'];
+    })
+    update('#vandal-fighters', vandal_fighters, 3);
+
+
+  }
+
   function enWikipediaSocket() {
 
   };
@@ -341,8 +368,25 @@
         }
         wiki_changes.update_groups();
         interesting = wiki_changes.show_interesting();
-        update(interesting['by_user']);
+        multi_updater(interesting['by_user']);
       });
+
+      // var highlight_set = setInterval(function() {
+      //   var highlights = $('#highlights li');
+      //   var interesting = wiki_changes.show_interesting()['by_user'];
+      //   if (highlights.length > 3) {
+      //     highlights[highlights.length - 1].fadeOut('300', function() {
+      //       $(this).remove();
+      //     });
+      //   }
+      //   if (interesting) {
+      //     var i = Math.floor(Math.random() * (interesting.length > LIST_LIMIT ? LIST_LIMIT : interesting.length))
+      //     var choice = interesting[i];
+      //     $('#highlights')
+      //       .prepend('<li>' + choice['username'] + '</li>')
+      //       .fadeIn('600');
+      //   }
+      // }, 15000)
       
 
       connection.onopen = function() {
@@ -374,11 +418,9 @@
           wiki_changes.update_groups();
           interesting = wiki_changes.show_interesting();
           if (interesting['by_user']) {
-            update(interesting['by_user']);
+            multi_updater(interesting['by_user']);
           }
         }
-        //var rc_str = '"<a href="' + data.url + '">' + data.page_title + '</a>" was edited by ' + data.user + ' (' + data.change_size + ')'
-        //log_rc(rc_str, null)
         $('#meta-active').html(wiki_changes.active.length);
         $('#meta-total').html(wiki_changes.total_counter);
         if (interesting) {

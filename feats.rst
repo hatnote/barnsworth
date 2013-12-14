@@ -22,6 +22,7 @@ Events
 * Created new (large?) page
 * Creating a User Talk page = welcoming (look for warning in comment though)
 * Collaboration (two editors on a same article, without revert)
+* Return from hiatus (usercontribs)
 
 Brainstorming
 =============
@@ -29,3 +30,7 @@ Brainstorming
 * Section editor?
 * Big talker (lots of Talk/User talk namespace edits)
 * Move, delete
+
+* Marathon editor (longest time editing at least once per <timespan>)
+* Creating a User Talk page = welcoming (look for warning in comment though)
+* Nth edit for the day/week/month  (proportion of total edits in the last month?)

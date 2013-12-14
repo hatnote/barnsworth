@@ -1,4 +1,4 @@
-
+  
   var DEFAULT_EXPIRE = 7200000;
   var DEFAULT_THRESH = 2;
   var REFRESH_RATE = 10;
@@ -100,7 +100,6 @@
       .text(d['edits'].length);
     modal.find('.recent-list:first')
       .html('<ul>' + title_list + '</ul>');
-    console.log(d)
     if (!d['edits'][0]['data']['is_anon']) {
       $.ajax({
         dataType: 'jsonp',
@@ -307,7 +306,15 @@
               }).length,
               'reverts': cur_user.filter(function(rev) {
                 return rev.is_revert();
-              }).length
+              }).length,
+              'new_pages': cur_user.filter(function(rev) {
+                return rev['data']['is_new'] === true;
+              }).length,
+              'ns_counts': cur_user.reduce(function(counter, rev) {
+                var ns = rev['data']['ns'];
+                counter[ns] = (counter[ns] ? counter[ns] + 1 : 1);
+                return counter;
+              }, {})
             }
             this.interesting['by_user'].push(ret)
           }

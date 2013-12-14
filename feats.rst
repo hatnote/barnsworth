@@ -18,3 +18,5 @@ Feats
 * Creating a User Talk page = welcoming (look for warning in comment though)
 * Nth edit for the day/week/month  (proportion of total edits in the last month?)
 * Became an active editor (5 edits in the last month)
+* Came back from hiatus
+* Streak (multiple edits in a row without others editing in between)

@@ -1,13 +1,13 @@
 Ranks
 =====
 
-* by number of edits
-* by number of minor edits
-* by number of reverts
-* by number of page creations
+- by number of edits
+- by number of minor edits
+- by number of reverts
+- by number of page creations
 * by number of media uploads (or media additions to articles?) 
 * by percentile change size
-* by number of edits to an unusual namespace (portal, book, wikiproject)
+- by number of edits to an unusual namespace (portal, book, wikiproject)
 * by marathon (time editing at least once per time window)
 
 Events
@@ -17,7 +17,6 @@ Events
 * Awarded first barnstar/thanked first user
 * Nth all-time edit (1st, 5th, 10th, 20th, 50th, 100th, ...)
 * Became an active editor (5 edits in the last month)
-* Nth edit for the day/week/month  (proportion of total edits in the last month?)
 * Wikipedia birthday
 * Prolific unregistered user
 * Created new (large?) page

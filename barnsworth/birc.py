@@ -3,6 +3,8 @@ import json
 import sys
 sys.path.insert(0, '../../wikimon')  # or pip install wikimon, maybe
 
+from gevent import monkey
+monkey.patch_socket()
 
 from geventwebsocket import (WebSocketServer,
                              WebSocketApplication,
@@ -11,6 +13,8 @@ from geventirc import Client as IRCClient
 from geventirc.message import Join
 
 from wikimon.parsers import parse_irc_message
+
+import ransom
 
 # TODO: extract/reconstruct upload URL
 # TODO: gevent websockets spinning too hard when there are no clients?
@@ -24,6 +28,27 @@ DEFAULT_IRC_CHANNELS = ['en.wikipedia']
 
 
 _JOIN_CODE = '001'
+
+_USERINFO_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=query&meta=globaluserinfo&guiuser=%s&guiprop=editcount|merged&format=json"
+
+class UserInfo(object):
+    def __init__(self, username, user_id, edit_count, reg_date, home_wiki,
+                 per_wiki_info=None):
+        self.username = username
+        self.user_id = user_id
+        self.edit_count = edit_count
+        self.reg_date = reg_date
+        self.home_wiki = home_wiki
+        self.per_wiki_info = per_wiki_info
+
+    @classmethod
+    def from_dict(cls, username, query_resp):
+        qr = query_resp
+        reg_date = qr.get('registration', None)
+        if reg_date:
+            pass  # TODO: parse
+        return cls(username, qr['id'], qr['editcount'], reg_date,
+                   qr.get('home'), qr.get('merged'))
 
 
 class Barnsworth(object):
@@ -67,6 +92,16 @@ class Barnsworth(object):
         #if msg_dict.get('action') =='edit' \
         #    and msg_dict.get('change_size') is None:
         #    #log
+        rc = ransom.Client()
+        if not msg_dict['is_anon']:
+            username = msg_dict['user']
+            resp = rc.get(_USERINFO_URL_TMPL % username)
+            ui_dict = json.loads(resp.text)['query']['globaluserinfo']
+            if 'missing' in ui_dict:
+                pass  # TODO: glitch (log)
+            else:
+                user_info = UserInfo.from_dict(username, ui_dict)
+                print user_info.username, user_info.edit_count, user_info.reg_date
         json_msg = json.dumps(msg_dict)
         for addr, ws_client in self.ws_server.clients.items():
             ws_client.ws.send(json_msg)

@@ -17,8 +17,6 @@ from wikimon.parsers import parse_irc_message
 # TODO: handle nick already in use
 # TODO: hashtags
 
-server = None
-
 DEFAULT_IRC_NICK = 'barnsworth'
 DEFAULT_IRC_SERVER = 'irc.wikimedia.org'
 DEFAULT_IRC_PORT = 6667
@@ -42,9 +40,16 @@ class Barnsworth(object):
         self.irc_client.add_handler(self.join_handler, _JOIN_CODE)
         self.irc_client.add_handler(self.pub_handler, 'PRIVMSG')
 
+        self.ws_server = WebSocketServer(('', 9000),  # TODO: config port
+                                         Resource({'/': WebSocketApplication}))
+
         defer_start = kwargs.pop('defer_start', False)
         if not defer_start:
-            self._start_irc()
+            self.start()
+
+    def start(self):
+        self._start_irc()
+        self._start_ws()
 
     def join_handler(self, client, msg):
         # TODO: need another handler to register a join failure?
@@ -63,29 +68,20 @@ class Barnsworth(object):
         #    and msg_dict.get('change_size') is None:
         #    #log
         json_msg = json.dumps(msg_dict)
-        for addr, ws_client in server.clients.items():
+        for addr, ws_client in self.ws_server.clients.items():
             ws_client.ws.send(json_msg)
         return
 
     def _start_irc(self):
         self.irc_client.start()
 
-
-class EchoApplication(WebSocketApplication):
-    def on_open(self):
-        print "Connection opened"
-
-    def on_close(self, reason):
-        print reason
+    def _start_ws(self):
+        self.ws_server.serve_forever()
 
 
 def main():
-    global server  # todo
-    server = WebSocketServer(('', 9000),
-                             Resource({'/': EchoApplication}))
     barnsworth = Barnsworth()
-    server.serve_forever()
-
+    barnsworth.start()
 
 if __name__ == '__main__':
     main()

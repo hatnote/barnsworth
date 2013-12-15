@@ -53,11 +53,15 @@ class Barnsworth(object):
 
     def pub_handler(self, client, msg):
         msg_content = ' '.join(msg.params[1:]).decode('utf-8')
+        msg_content.replace(u'\x02', '')  # hmm, TODO
         try:
             msg_dict = parse_irc_message(msg_content)
         except Exception as e:
             # log
             return
+        #if msg_dict.get('action') =='edit' \
+        #    and msg_dict.get('change_size') is None:
+        #    #log
         json_msg = json.dumps(msg_dict)
         for addr, ws_client in server.clients.items():
             ws_client.ws.send(json_msg)

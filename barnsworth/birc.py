@@ -127,31 +127,50 @@ class Barnsworth(object):
         #if msg_dict.get('action') =='edit' \
         #    and msg_dict.get('change_size') is None:
         #    #log
-        rc = ransom.Client()
-        if not msg_dict['is_anon']:
-            username = msg_dict['user']
-            resp = rc.get(_USERINFO_URL_TMPL % username)
-            ui_dict = json.loads(resp.text)['query']['globaluserinfo']
-            if 'missing' in ui_dict:
-                pass  # TODO: glitch (log)
-            else:
-                user_info = UserInfo.from_dict(username, ui_dict)
-                try:
-                    if not TMP_DEBUG_REG_MAP[username] == user_info.reg_date:
-                        import pdb;pdb.set_trace()
-                except KeyError:
-                    TMP_DEBUG_REG_MAP[username] = user_info.reg_date
-                resp2 = rc.get(_USERDAILY_URL_TMPL % username)
-                udc_dict = json.loads(resp2.text)['userdailycontribs']
-                user_daily = UserDailyInfo.from_dict(username, udc_dict)
-                #diff = user_info.edit_count - user_daily.total_edits
-                #print user_info.username, user_info.edit_count, '-', user_daily.total_edits, '=', diff
-                timediff = user_info.reg_date - user_daily.reg_date
-                print user_info.username, '(', user_info.home_wiki, '):', user_info.reg_date, '-', user_daily.reg_date, '=', timediff
+        self.augment_message(msg_dict)  # in-place mutation for now, i guess
         json_msg = json.dumps(msg_dict)
         for addr, ws_client in self.ws_server.clients.items():
             ws_client.ws.send(json_msg)
         return
+
+    def augment_message(self, msg_dict):
+        if not msg_dict['is_anon']:
+            username = msg_dict['user']
+            rc = ransom.Client()
+            resp = rc.get(_USERDAILY_URL_TMPL % username)
+            udc_dict = json.loads(resp.text)['userdailycontribs']
+            user_daily = UserDailyInfo.from_dict(username, udc_dict)
+            if user_daily.reg_date:
+                today = datetime.date.today()
+                user_reg_date = user_daily.reg_date.date()
+                wiki_age = round((today - user_reg_date).days / 365.0, 2)
+                msg_dict['wiki_age'] = wiki_age
+                if today == user_reg_date:
+                    msg_dict['is_wiki_birthday'] = True
+                else:
+                    msg_dict['is_wiki_birthday'] = False
+        return msg_dict
+
+
+
+    def _global_user_info_compare(self, msg_dict):
+        if not msg_dict['is_anon']:
+            username = msg_dict['name']
+            rc = ransom.Client()
+            resp = rc.get(_USERINFO_URL_TMPL % username)
+            ui_dict = json.loads(resp.text)['query']['globaluserinfo']
+            if 'missing' in ui_dict:
+                return  # TODO: glitch (log)
+            user_info = UserInfo.from_dict(username, ui_dict)
+            username = msg_dict['user']
+            resp2 = rc.get(_USERDAILY_URL_TMPL % username)
+            udc_dict = json.loads(resp2.text)['userdailycontribs']
+            user_daily = UserDailyInfo.from_dict(username, udc_dict)
+            #diff = user_info.edit_count - user_daily.total_edits
+            #print user_info.username, user_info.edit_count, '-', user_daily.total_edits, '=', diff
+            timediff = user_info.reg_date - user_daily.reg_date
+            print user_info.username, '(', user_info.home_wiki, '):', user_info.reg_date, '-', user_daily.reg_date, '=', timediff
+        return msg_dict
 
     def _start_irc(self):
         self.irc_client.start()

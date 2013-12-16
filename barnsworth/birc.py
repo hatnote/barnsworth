@@ -1,7 +1,7 @@
 
-import json
 import sys
-sys.path.insert(0, '../../wikimon')  # or pip install wikimon, maybe
+import json
+import datetime
 
 from gevent import monkey
 monkey.patch_socket()
@@ -12,6 +12,7 @@ from geventwebsocket import (WebSocketServer,
 from geventirc import Client as IRCClient
 from geventirc.message import Join
 
+sys.path.insert(0, '../../wikimon')  # or pip install wikimon, maybe
 from wikimon.parsers import parse_irc_message
 
 import ransom
@@ -30,14 +31,24 @@ DEFAULT_IRC_CHANNELS = ['en.wikipedia']
 _JOIN_CODE = '001'
 
 _USERINFO_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=query&meta=globaluserinfo&guiuser=%s&guiprop=editcount|merged&format=json"
+_USERDAILY_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=userdailycontribs&user=%s&daysago=90&format=json"
+
+
+def parse_timestamp(timestamp):
+    return datetime.datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%SZ')
+
+
+def parse_timestamp_nopunct(timestamp):
+    return datetime.datetime.strptime(timestamp, '%Y%m%d%H%M%S')
+
 
 class UserInfo(object):
-    def __init__(self, username, user_id, edit_count, reg_date, home_wiki,
+    def __init__(self, username, user_id, reg_date, edit_count, home_wiki,
                  per_wiki_info=None):
         self.username = username
         self.user_id = user_id
-        self.edit_count = edit_count
         self.reg_date = reg_date
+        self.edit_count = edit_count
         self.home_wiki = home_wiki
         self.per_wiki_info = per_wiki_info
 
@@ -46,9 +57,33 @@ class UserInfo(object):
         qr = query_resp
         reg_date = qr.get('registration', None)
         if reg_date:
-            pass  # TODO: parse
-        return cls(username, qr['id'], qr['editcount'], reg_date,
+            reg_date = parse_timestamp(reg_date)
+        return cls(username, qr['id'], reg_date, qr['editcount'],
                    qr.get('home'), qr.get('merged'))
+
+
+class UserDailyInfo(object):
+    def __init__(self, username, user_id, reg_date, total_edits,
+                 timeframe_edits, start_date=None, end_date=None):
+        self.username = username
+        self.user_id = user_id
+        self.reg_date = reg_date
+        self.total_edits = total_edits
+        self.timeframe_edits = timeframe_edits
+        self.start_date = start_date
+        self.end_date = end_date
+
+    @classmethod
+    def from_dict(cls, username, query_resp):
+        qr = query_resp
+        reg_date = qr.get('registration', None)
+        if reg_date:
+            if reg_date == '0':
+                reg_date = None
+            else:
+                reg_date = parse_timestamp_nopunct(reg_date)
+        return cls(username, qr['id'], reg_date,
+                   qr['totalEdits'], qr['timeFrameEdits'])
 
 
 class Barnsworth(object):
@@ -101,7 +136,18 @@ class Barnsworth(object):
                 pass  # TODO: glitch (log)
             else:
                 user_info = UserInfo.from_dict(username, ui_dict)
-                print user_info.username, user_info.edit_count, user_info.reg_date
+                try:
+                    if not TMP_DEBUG_REG_MAP[username] == user_info.reg_date:
+                        import pdb;pdb.set_trace()
+                except KeyError:
+                    TMP_DEBUG_REG_MAP[username] = user_info.reg_date
+                resp2 = rc.get(_USERDAILY_URL_TMPL % username)
+                udc_dict = json.loads(resp2.text)['userdailycontribs']
+                user_daily = UserDailyInfo.from_dict(username, udc_dict)
+                #diff = user_info.edit_count - user_daily.total_edits
+                #print user_info.username, user_info.edit_count, '-', user_daily.total_edits, '=', diff
+                timediff = user_info.reg_date - user_daily.reg_date
+                print user_info.username, '(', user_info.home_wiki, '):', user_info.reg_date, '-', user_daily.reg_date, '=', timediff
         json_msg = json.dumps(msg_dict)
         for addr, ws_client in self.ws_server.clients.items():
             ws_client.ws.send(json_msg)
@@ -113,6 +159,8 @@ class Barnsworth(object):
     def _start_ws(self):
         self.ws_server.serve_forever()
 
+
+TMP_DEBUG_REG_MAP = {}
 
 def main():
     barnsworth = Barnsworth()

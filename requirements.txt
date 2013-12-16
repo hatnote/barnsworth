@@ -1,4 +1,5 @@
 -e git+https://github.com/mahmoud/clastic.git#egg=clastic
+-e git+https://github.com/mahmoud/boltons.git#egg=boltons
 
 Twisted==13.0.0
 autobahn==0.5.14

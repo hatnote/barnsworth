@@ -12,6 +12,7 @@ from geventwebsocket import (WebSocketServer,
 from geventirc import Client as IRCClient
 from geventirc.message import Join
 
+from boltons.strutils import ordinalize
 sys.path.insert(0, '../../wikimon')  # or pip install wikimon, maybe
 from wikimon.parsers import parse_irc_message
 
@@ -32,6 +33,15 @@ _JOIN_CODE = '001'
 
 _USERINFO_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=query&meta=globaluserinfo&guiuser=%s&guiprop=editcount|merged&format=json"
 _USERDAILY_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=userdailycontribs&user=%s&daysago=90&format=json"
+
+
+MILESTONE_EDITS = [1, 3, 5, 10, 20, 50, 100, 200, 300, 500]
+
+
+def is_milestone_edit(count):
+    if count > 0 and (count % 1000 == 0 or count in MILESTONE_EDITS):
+        return True
+    return False
 
 
 def parse_timestamp(timestamp):
@@ -149,9 +159,12 @@ class Barnsworth(object):
                     msg_dict['is_wiki_birthday'] = True
                 else:
                     msg_dict['is_wiki_birthday'] = False
+            total_edits = user_daily.total_edits
+            msg_dict['total_edits'] = total_edits
+            if is_milestone_edit(total_edits):
+                msg_dict['milestone_edit'] = ordinalize(total_edits)
+                print username, msg_dict['milestone_edit'], '!'
         return msg_dict
-
-
 
     def _global_user_info_compare(self, msg_dict):
         if not msg_dict['is_anon']:

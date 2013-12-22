@@ -24,7 +24,6 @@ class WebSocketServer(WSGIServer):
     def handle(self, socket, address):
         handler = self.handler_class(socket, address, self)
         handler.handle()
-        print "Connected Clients: ", str(self.clients.keys())
 
     @property
     def logger(self):

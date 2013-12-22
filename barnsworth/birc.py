@@ -18,6 +18,8 @@ from wikimon.parsers import parse_irc_message
 
 import ransom
 
+DEBUG = True
+
 # TODO: extract/reconstruct upload URL
 # TODO: gevent websockets spinning too hard when there are no clients?
 # TODO: handle nick already in use

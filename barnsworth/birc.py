@@ -38,6 +38,31 @@ _USERDAILY_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=userdailycontri
 MILESTONE_EDITS = [1, 3, 5, 10, 20, 50, 100, 200, 300, 500]
 
 
+def signal_handler(signal, frame):
+    gstacks = []
+    try:
+        import gc
+        import traceback
+        from greenlet import greenlet
+        for ob in gc.get_objects():
+            if isinstance(ob, greenlet):
+                gstacks.append(''.join(traceback.format_stack(ob.gr_frame)))
+    except Exception:
+        print "couldn't collect (all) greenlet stacks"
+    for i, gs in enumerate(gstacks):
+        print '==== Stack', i + 1, '===='
+        print gs
+        print '------------'
+    import pdb;pdb.set_trace()
+
+
+if DEBUG:
+    # NOTE: if this is enabled, you may have to use ctrl+z
+    # and run "kill %%" to terminate the process
+    import signal
+    signal.signal(signal.SIGINT, signal_handler)
+
+
 def is_milestone_edit(count):
     if count > 0 and (count % 1000 == 0 or count in MILESTONE_EDITS):
         return True

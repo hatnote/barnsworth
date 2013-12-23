@@ -11,6 +11,7 @@ from geventwebsocket import (WebSocketServer,
                              Resource)
 from geventirc import Client as IRCClient
 from geventirc.message import Join
+from geventirc.handlers import ping_handler
 
 from boltons.strutils import ordinalize
 sys.path.insert(0, '../../wikimon')  # or pip install wikimon, maybe
@@ -109,6 +110,7 @@ class Barnsworth(object):
                                     self.irc_nick,
                                     self.irc_port,
                                     reconnect=True)
+        self.irc_client.add_handler(ping_handler, 'PING')
         self.irc_client.add_handler(self.join_handler, _JOIN_CODE)
         self.irc_client.add_handler(self.pub_handler, 'PRIVMSG')
 

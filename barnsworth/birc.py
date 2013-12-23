@@ -18,10 +18,9 @@ from wikimon.parsers import parse_irc_message
 
 import ransom
 
-DEBUG = True
+DEBUG = False
 
 # TODO: extract/reconstruct upload URL
-# TODO: gevent websockets spinning too hard when there are no clients?
 # TODO: handle nick already in use
 # TODO: hashtags
 
@@ -108,7 +107,8 @@ class Barnsworth(object):
         # TODO: validate channel formatting?
         self.irc_client = IRCClient(self.irc_server,
                                     self.irc_nick,
-                                    self.irc_port)
+                                    self.irc_port,
+                                    reconnect=True)
         self.irc_client.add_handler(self.join_handler, _JOIN_CODE)
         self.irc_client.add_handler(self.pub_handler, 'PRIVMSG')
 
@@ -195,7 +195,7 @@ class Barnsworth(object):
 
 
 _PDBed = False
-BARNSWORTH = Barnsworth(defer_start=True)
+
 
 def signal_handler(signal, frame):
     global _PDBed
@@ -229,5 +229,7 @@ if DEBUG:
     signal.signal(signal.SIGINT, signal_handler)
 
 
+barnsworth = BW = Barnsworth(defer_start=True)
+
 if __name__ == '__main__':
-    BARNSWORTH.start()
+    barnsworth.start()

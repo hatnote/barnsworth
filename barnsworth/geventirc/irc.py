@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import logging
 
+import gevent
 import gevent.queue
 import gevent.pool
 from gevent import socket
@@ -13,16 +14,20 @@ from geventirc import handlers
 IRC_PORT = 194
 IRCS_PORT = 994
 
+WAIT_FACTOR = 0.010  # 10ms
+
 logger = logging.getLogger(__name__)
 
 
 class Client(object):
 
     def __init__(self, hostname, nick, port=IRC_PORT,
-            local_hostname=None, server_name=None, real_name=None):
+                 local_hostname=None, server_name=None, real_name=None,
+                 reconnect=False):
         self.hostname = hostname
         self.port = port
         self.nick = nick
+        self.autoreconnect = reconnect
         self._socket = None
         self.real_name = real_name or nick
         self.local_hostname = local_hostname or socket.gethostname()
@@ -54,6 +59,20 @@ class Client(object):
             for handler in handlers:
                 self._group.spawn(handler, self, msg)
 
+    def handle_disconnect(self):
+        # TODO: still need to distinguish between intentional
+        # and unintentional disconnects
+        if not self.autoreconnect:
+            return
+        i = 1
+        while 1:
+            try:
+                self.start()
+                return
+            except socket.error:
+                gevent.sleep(WAIT_FACTOR * (2 ** min(i, 10)))
+                i += 1
+
     def send_message(self, msg):
         self._send_queue.put(msg.encode())
 
@@ -78,6 +97,10 @@ class Client(object):
         buf = ''
         while True:
             data = self._socket.recv(512)
+            if data == '':
+                # disconnected
+                gevent.spawn(self.stop)
+                gevent.sleep(0.5)
             buf += data
             pos = buf.find("\r\n")
             while pos >= 0:
@@ -109,6 +132,7 @@ class Client(object):
         if self._socket is not None:
             self._socket.close()
             self._socket = None
+            gevent.spawn(self.handle_disconnect)
 
     def join(self):
         self._group.join()
@@ -144,5 +168,3 @@ if __name__ == '__main__':
     client.add_handler(MeHandler())
     client.start()
     client.join()
-
-

@@ -37,13 +37,49 @@ _USERINFO_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=query&meta=globa
 _USERDAILY_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=userdailycontribs&user=%s&daysago=90&format=json"
 
 
-MILESTONE_EDITS = [1, 3, 5, 10, 20, 50, 100, 200, 300, 500]
+MILESTONE_EDITS = [1, 5, 10, 20, 50, 100, 200, 300, 500]
 
 
 def is_milestone_edit(count):
     if count > 0 and (count % 1000 == 0 or count in MILESTONE_EDITS):
         return True
     return False
+
+
+def is_new_user(msg):
+    if msg['page_title'] != 'Special:Log/newusers':
+        return False
+    if msg['action'] != 'create':
+        return False
+    if msg['wiki_age'] < 1:
+        return False
+    return True
+
+
+def is_new_article(msg):
+    if not msg['is_new']:
+        return False
+    if msg['ns'] != 'Main':
+        return False
+    return True
+
+
+def is_new_large(msg):
+    if not is_new_article(msg):
+        return False
+    if msg['change_size'] < 2000:
+        return False
+    return True
+
+
+def is_welcome(msg):
+    if not msg['is_new']:
+        return False
+    if msg['ns'] != 'User talk':
+        return False
+    if not 'welcome' in msg['summary'].lower():
+        return False
+    return True
 
 
 def parse_timestamp(timestamp):
@@ -165,9 +201,17 @@ class Barnsworth(object):
                     msg_dict['is_wiki_birthday'] = False
             total_edits = user_daily.total_edits
             msg_dict['total_edits'] = total_edits
+            if is_welcome(msg_dict):
+                print 'welcomed user', username
+            if is_new_large(msg_dict):
+                print 'new page created by', username, 'page:', msg_dict['page_title']
+            if msg_dict.get('is_wiki_birthday') and msg_dict['wiki_age'] > 0:
+                print 'wiki birthday for', username, 'age:', msg_dict['wiki_age'] 
             if is_milestone_edit(total_edits):
                 msg_dict['milestone_edit'] = ordinalize(total_edits)
-                print username, msg_dict['milestone_edit'], '!'
+                print username, 'milestone edit:', msg_dict['milestone_edit']
+            if is_new_user(msg_dict):
+                print 'new user:    ', username
         return msg_dict
 
     def _global_user_info_compare(self, msg_dict):

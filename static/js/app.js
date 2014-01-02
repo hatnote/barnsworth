@@ -8,6 +8,9 @@
   var BOOTUP_API_URL = 'http://wikimedia-foundation-2.local:5000/recent/?callback=?';
   var change_templ;
 
+  var RC_FEED_URL = 'ws://wikimon.hatnote.com/en/';
+  var EVENTS_FEED_URL = 'ws://localhost:9000';
+
   $(function() {
     $('#modal-template').hide();
     $('#expire-time').html(DEFAULT_EXPIRE / 1000)
@@ -352,6 +355,45 @@
 
   }
 
+  function eventSocket() {
+
+  };
+
+  eventSocket.init = function() {
+    if (this.connection) {
+       this.connection.close();
+    }
+
+    if ('WebSocket' in window) {
+      var wiki_changes = new recent_changes;
+      var connection = new ReconnectingWebSocket(EVENTS_FEED_URL);
+      this.connection = connection;
+      
+      connection.onopen = function() {
+        console.log('Event connection open');
+      };
+
+      connection.onclose = function() {
+        console.log('Event connection closed ...')
+      };
+
+      connection.onerror = function(error) {
+        console.log('Event connection Error: ' + error);
+      };
+
+      connection.onmessage = function(resp) {
+        var data = JSON.parse(resp.data);
+        console.log(data);
+      };
+    }
+  };
+
+  eventSocket.close = function() {
+    if (this.connection) {
+      this.connection.close();
+    }
+  };
+
   function enWikipediaSocket() {
 
   };
@@ -363,7 +405,7 @@
 
     if ('WebSocket' in window) {
       var wiki_changes = new recent_changes;
-      var connection = new ReconnectingWebSocket('ws://wikimon.hatnote.com/en/');
+      var connection = new ReconnectingWebSocket(RC_FEED_URL);
       this.connection = connection;
       var ns_counts = {}
 
@@ -444,4 +486,6 @@
       this.connection.close();
     }
   };
+
   enWikipediaSocket.init();
+  eventSocket.init();

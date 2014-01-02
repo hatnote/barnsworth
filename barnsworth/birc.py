@@ -5,7 +5,6 @@ import datetime
 
 from gevent import monkey
 monkey.patch_socket()
-
 from geventwebsocket import (WebSocketServer,
                              WebSocketApplication,
                              Resource)
@@ -40,7 +39,27 @@ _USERDAILY_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=userdailycontri
 MILESTONE_EDITS = [1, 5, 10, 20, 50, 100, 200, 300, 500]
 
 
-def is_milestone_edit(count):
+class EditEvent(object):
+    def __init__(self, event, name, value=True):
+        self.event = event
+        self.name = name
+        self.value = value
+
+    def to_dict(self):
+        return {
+            'event': self.event,
+            'name': self.name,
+            'value': self.value,
+        }
+
+    def to_json(self):
+        return json.dumps(self.to_dict())
+
+# TODO: whats the best way to organize these?
+def is_milestone_edit(msg):
+    count = msg['total_edits']
+    if msg['action'] != 'edit':
+        return False
     if count > 0 and (count % 1000 == 0 or count in MILESTONE_EDITS):
         return True
     return False
@@ -80,6 +99,12 @@ def is_welcome(msg):
     if not 'welcome' in msg['summary'].lower():
         return False
     return True
+
+
+def is_wiki_birthday(msg):
+    if msg['is_wiki_birthday'] and msg['wiki_age'] > 0:
+        return True
+    return False
 
 
 def parse_timestamp(timestamp):
@@ -152,7 +177,6 @@ class Barnsworth(object):
 
         self.ws_server = WebSocketServer(('', 9000),  # TODO: config port
                                          Resource({'/': WebSocketApplication}))
-
         defer_start = kwargs.pop('defer_start', False)
         if not defer_start:
             self.start()
@@ -178,17 +202,26 @@ class Barnsworth(object):
         #    and msg_dict.get('change_size') is None:
         #    #log
         self.augment_message(msg_dict)  # in-place mutation for now, i guess
-        json_msg = json.dumps(msg_dict)
+        #json_msg = json.dumps(msg_dict)
         for addr, ws_client in self.ws_server.clients.items():
-            ws_client.ws.send(json_msg)
+            for event in self.events:
+                ws_client.ws.send(event.to_json())
+                print event.to_json()
         return
 
     def augment_message(self, msg_dict):
+        ret = []
+        msg_dict['is_wiki_birthday'] = False
+        msg_dict['wiki_age'] = 0
+        msg_dict['total_edits'] = 0
+        username = msg_dict['user']
         if not msg_dict['is_anon']:
-            username = msg_dict['user']
             rc = ransom.Client()
             resp = rc.get(_USERDAILY_URL_TMPL % username)
-            udc_dict = json.loads(resp.text)['userdailycontribs']
+            try: 
+                udc_dict = json.loads(resp.text)['userdailycontribs']
+            except KeyError:
+                pass
             user_daily = UserDailyInfo.from_dict(username, udc_dict)
             if user_daily.reg_date:
                 today = datetime.date.today()
@@ -197,22 +230,20 @@ class Barnsworth(object):
                 msg_dict['wiki_age'] = wiki_age
                 if today == user_reg_date:
                     msg_dict['is_wiki_birthday'] = True
-                else:
-                    msg_dict['is_wiki_birthday'] = False
             total_edits = user_daily.total_edits
             msg_dict['total_edits'] = total_edits
-            if is_welcome(msg_dict):
-                print 'welcomed user', username
-            if is_new_large(msg_dict):
-                print 'new page created by', username, 'page:', msg_dict['page_title']
-            if msg_dict.get('is_wiki_birthday') and msg_dict['wiki_age'] > 0:
-                print 'wiki birthday for', username, 'age:', msg_dict['wiki_age'] 
-            if is_milestone_edit(total_edits):
-                msg_dict['milestone_edit'] = ordinalize(total_edits)
-                print username, 'milestone edit:', msg_dict['milestone_edit']
-            if is_new_user(msg_dict):
-                print 'new user:    ', username
-        return msg_dict
+        if is_welcome(msg_dict):
+            ret.append(EditEvent('welcome', username))
+        if is_new_large(msg_dict):
+            ret.append(EditEvent('newlargepage', username, msg_dict['page_title']))
+        if is_wiki_birthday(msg_dict):
+            ret.append(EditEvent('birthday', username, msg_dict['wiki_age']))
+        if is_milestone_edit(msg_dict):
+            ret.append(EditEvent('milestone', username, total_edits))
+        if is_new_user(msg_dict):
+            ret.append(EditEvent('newuser', username))
+        self.events = ret
+        return ret
 
     def _global_user_info_compare(self, msg_dict):
         if not msg_dict['is_anon']:

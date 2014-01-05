@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 
 import sys
 import json
@@ -17,6 +18,10 @@ sys.path.insert(0, '../../wikimon')  # or pip install wikimon, maybe
 from wikimon.parsers import parse_irc_message
 
 import ransom
+
+
+import events
+
 
 DEBUG = False
 
@@ -39,21 +44,28 @@ _USERDAILY_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=userdailycontri
 MILESTONE_EDITS = [1, 5, 10, 20, 50, 100, 200, 300, 500]
 
 
-class EditEvent(object):
-    def __init__(self, event, name, value=True):
-        self.event = event
-        self.name = name
-        self.value = value
+EVENT_MAP = {'edit': [],  # events.MilestoneEdit, events.BirthdayEdit],
+             'block': [],
+             'new_user': [],
+             'create': [events.NewUser]}
 
-    def to_dict(self):
-        return {
-            'event': self.event,
-            'name': self.name,
-            'value': self.value,
-        }
 
-    def to_json(self):
-        return json.dumps(self.to_dict())
+class ActionContext(object):
+    "Supports adding user info and maybe article/content info"
+    def __init__(self, action, events=None):
+        self.action = action
+        self.events = list(events or [])
+
+    @property
+    def action_type(self):
+        try:
+            return self.action['action']
+        except:
+            return None
+
+    def add_event(self, event):
+        self.events.append(event)
+
 
 # TODO: whats the best way to organize these?
 def is_milestone_edit(msg):
@@ -84,11 +96,9 @@ def is_new_article(msg):
 
 
 def is_new_large(msg):
-    if not is_new_article(msg):
-        return False
-    if msg['change_size'] < 2000:
-        return False
-    return True
+    if is_new_article(msg) or msg['change_size'] > 2000:
+        return True
+    return False
 
 
 def is_welcome(msg):
@@ -172,8 +182,8 @@ class Barnsworth(object):
                                     self.irc_port,
                                     reconnect=True)
         self.irc_client.add_handler(ping_handler, 'PING')
-        self.irc_client.add_handler(self.join_handler, _JOIN_CODE)
-        self.irc_client.add_handler(self.pub_handler, 'PRIVMSG')
+        self.irc_client.add_handler(self.on_irc_connect, _JOIN_CODE)
+        self.irc_client.add_handler(self.on_message, 'PRIVMSG')
 
         self.ws_server = WebSocketServer(('', 9000),  # TODO: config port
                                          Resource({'/': WebSocketApplication}))
@@ -185,29 +195,53 @@ class Barnsworth(object):
         self._start_irc()
         self._start_ws()
 
-    def join_handler(self, client, msg):
+    def on_irc_connect(self, client, msg):
         # TODO: need another handler to register a join failure?
         for channel in self.irc_channels:
             client.send_message(Join(channel))
 
-    def pub_handler(self, client, msg):
+    def on_message(self, client, msg):
         msg_content = ' '.join(msg.params[1:]).decode('utf-8')
         msg_content.replace(u'\x02', '')  # hmm, TODO
         try:
-            msg_dict = parse_irc_message(msg_content)
+            action_dict = parse_irc_message(msg_content)
         except Exception as e:
             # log
             return
-        #if msg_dict.get('action') =='edit' \
-        #    and msg_dict.get('change_size') is None:
-        #    #log
-        self.augment_message(msg_dict)  # in-place mutation for now, i guess
-        #json_msg = json.dumps(msg_dict)
-        for addr, ws_client in self.ws_server.clients.items():
-            for event in self.events:
-                ws_client.ws.send(event.to_json())
-                print event.to_json()
+        action_ctx = ActionContext(action_dict)
+        self.publish_activity(action_ctx)
         return
+
+    def publish_activity(self, action_ctx):
+        action_json = json.dumps(action_ctx.action, sort_keys=True)
+        for addr, ws_client in self.ws_server.clients.iteritems():
+            ws_client.ws.send(action_json)
+
+        # TODO: store action for activity batch service?
+        # TODO: handle augmentation
+        event_list = self._detect_events(action_ctx)
+        for event in event_list:
+            action_ctx.add_event(event)
+            event_json = event.to_json()
+            for addr, ws_client in self.ws_server.clients.iteritems():
+                ws_client.ws.send(event_json)
+        return
+
+    def _detect_events(self, action_ctx):
+        try:
+            event_types = EVENT_MAP[action_ctx.action_type]
+        except KeyError:
+            return []
+        event_list = []
+        for event_type in event_types:
+            try:
+                event_list.append(event_type.from_action_context(action_ctx))
+            except events.Uneventful as ue:
+                print 'event not applicable', ue
+            except Exception as e:
+                print 'event exception', e
+        return event_list
+
 
     def augment_message(self, msg_dict):
         ret = []
@@ -218,7 +252,7 @@ class Barnsworth(object):
         if not msg_dict['is_anon']:
             rc = ransom.Client()
             resp = rc.get(_USERDAILY_URL_TMPL % username)
-            try: 
+            try:
                 udc_dict = json.loads(resp.text)['userdailycontribs']
             except KeyError:
                 pass
@@ -232,17 +266,16 @@ class Barnsworth(object):
                     msg_dict['is_wiki_birthday'] = True
             total_edits = user_daily.total_edits
             msg_dict['total_edits'] = total_edits
-        if is_welcome(msg_dict):
-            ret.append(EditEvent('welcome', username))
-        if is_new_large(msg_dict):
-            ret.append(EditEvent('newlargepage', username, msg_dict['page_title']))
-        if is_wiki_birthday(msg_dict):
-            ret.append(EditEvent('birthday', username, msg_dict['wiki_age']))
-        if is_milestone_edit(msg_dict):
-            ret.append(EditEvent('milestone', username, total_edits))
-        if is_new_user(msg_dict):
-            ret.append(EditEvent('newuser', username))
-        self.events = ret
+        #if is_welcome(msg_dict):
+        #    ret.append(EditEvent('welcome', username))
+        #if is_new_large(msg_dict):
+        #    ret.append(EditEvent('newlargepage', username, msg_dict['page_title']))
+        #if is_wiki_birthday(msg_dict):
+        #    ret.append(EditEvent('birthday', username, msg_dict['wiki_age']))
+        #if is_milestone_edit(msg_dict):
+        #    ret.append(EditEvent('milestone', username, total_edits))
+        #if is_new_user(msg_dict):
+        #    ret.append(EditEvent('newuser', username))
         return ret
 
     def _global_user_info_compare(self, msg_dict):

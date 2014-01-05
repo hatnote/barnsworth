@@ -13,7 +13,6 @@ from geventirc import Client as IRCClient
 from geventirc.message import Join
 from geventirc.handlers import ping_handler
 
-from boltons.strutils import ordinalize
 sys.path.insert(0, '../../wikimon')  # or pip install wikimon, maybe
 from wikimon.parsers import parse_irc_message
 
@@ -27,7 +26,6 @@ DEBUG = False
 
 # TODO: extract/reconstruct upload URL
 # TODO: handle nick already in use
-# TODO: hashtags
 
 DEFAULT_IRC_NICK = 'barnsworth'
 DEFAULT_IRC_SERVER = 'irc.wikimedia.org'
@@ -216,7 +214,7 @@ class Barnsworth(object):
                 #print 'event not applicable: ', ue
                 pass
             except Exception as e:
-                print 'event exception', e
+                print 'event exception', repr(e)
             else:
                 print event
         return event_list

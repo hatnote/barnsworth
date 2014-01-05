@@ -147,7 +147,7 @@ class NewUserWelcome(Event):
     def from_action_context(cls, action_ctx):
         action = action_ctx.action
         namespace, summary = action['ns'], action['summary']
-        if namespace == 'User talk':
+        if namespace == 'User talk' and 'username' in action:
             if summary and 'welcom' in summary.lower():
                 welcomer = action['username']
                 recipient = action['page_title'].partition('/')[0]

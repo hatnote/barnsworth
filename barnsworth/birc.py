@@ -36,6 +36,23 @@ _USERINFO_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=query&meta=globa
 _USERDAILY_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=userdailycontribs&user=%s&daysago=90&format=json"
 
 
+class UserInfoPool(object):
+    def __init__(self, max_size=1024):
+        self.cache = {}
+
+    def get_user_info(self, username):
+        try:
+            return self.cache[username]
+        except KeyError:
+            pass  # do API call
+
+    def add_action(self, username, action):
+        pass
+
+    def register_new_user(self, username):
+        pass
+
+
 EVENT_MAP = {'edit': [events.NewUserWelcome,
                       events.BirthdayEdit,
                       events.NewArticle,
@@ -68,29 +85,6 @@ def parse_timestamp(timestamp):
 
 def parse_timestamp_nopunct(timestamp):
     return datetime.datetime.strptime(timestamp, '%Y%m%d%H%M%S')
-
-
-"""
-# only used to demonstrate issues with APIs
-class UserInfo(object):
-    def __init__(self, username, user_id, reg_date, edit_count, home_wiki,
-                 per_wiki_info=None):
-        self.username = username
-        self.user_id = user_id
-        self.reg_date = reg_date
-        self.edit_count = edit_count
-        self.home_wiki = home_wiki
-        self.per_wiki_info = per_wiki_info
-
-    @classmethod
-    def from_dict(cls, username, query_resp):
-        qr = query_resp
-        reg_date = qr.get('registration', None)
-        if reg_date:
-            reg_date = parse_timestamp(reg_date)
-        return cls(username, qr['id'], reg_date, qr['editcount'],
-                   qr.get('home'), qr.get('merged'))
-"""
 
 
 class UserDailyInfo(object):
@@ -183,6 +177,7 @@ class Barnsworth(object):
     def _augment_action_ctx(self, action_ctx):
         action = action_ctx.action
         if action['is_anon']:
+            # TODO: geo-augmentor
             return  # TODO?
         username = action['user']
         rc = ransom.Client()
@@ -206,35 +201,17 @@ class Barnsworth(object):
                 event = event_type.from_action_context(action_ctx)
                 event_list.append(event)
             except events.Uneventful:
-                # probably not even log this
+                # probably won't even log this
                 # Uneventful is uneventful for a reason
                 #print 'event not applicable: ', ue
                 pass
             except Exception as e:
+                # log this
                 print 'event exception', repr(e)
             else:
                 print event
         return event_list
-    """
-    def _global_user_info_compare(self, msg_dict):
-        if not msg_dict['is_anon']:
-            username = msg_dict['name']
-            rc = ransom.Client()
-            resp = rc.get(_USERINFO_URL_TMPL % username)
-            ui_dict = json.loads(resp.text)['query']['globaluserinfo']
-            if 'missing' in ui_dict:
-                return  # TODO: glitch (log)
-            user_info = UserInfo.from_dict(username, ui_dict)
-            username = msg_dict['user']
-            resp2 = rc.get(_USERDAILY_URL_TMPL % username)
-            udc_dict = json.loads(resp2.text)['userdailycontribs']
-            user_daily = UserDailyInfo.from_dict(username, udc_dict)
-            #diff = user_info.edit_count - user_daily.total_edits
-            #print user_info.username, user_info.edit_count, '-', user_daily.total_edits, '=', diff
-            timediff = user_info.reg_date - user_daily.reg_date
-            print user_info.username, '(', user_info.home_wiki, '):', user_info.reg_date, '-', user_daily.reg_date, '=', timediff
-        return msg_dict
-    """
+
     def _start_irc(self):
         self.irc_client.start()
 

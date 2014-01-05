@@ -24,9 +24,6 @@ import events
 
 DEBUG = False
 
-# TODO: extract/reconstruct upload URL
-# TODO: handle nick already in use
-
 DEFAULT_IRC_NICK = 'barnsworth'
 DEFAULT_IRC_SERVER = 'irc.wikimedia.org'
 DEFAULT_IRC_PORT = 6667

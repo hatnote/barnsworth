@@ -41,12 +41,11 @@ _USERINFO_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=query&meta=globa
 _USERDAILY_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=userdailycontribs&user=%s&daysago=90&format=json"
 
 
-MILESTONE_EDITS = [1, 5, 10, 20, 50, 100, 200, 300, 500]
-
-# events.MilestoneEdit, events.BirthdayEdit],
-EVENT_MAP = {'edit': [events.NewUserWelcome],
+EVENT_MAP = {'edit': [events.NewUserWelcome,
+                      events.BirthdayEdit,
+                      events.NewArticle,
+                      events.MilestoneEdit],
              'block': [],
-             'new_user': [],
              'create': [events.NewUser]}
 
 
@@ -55,6 +54,7 @@ class ActionContext(object):
     def __init__(self, action, events=None):
         self.action = action
         self.events = list(events or [])
+        self.user_daily_info = None
 
     @property
     def action_type(self):
@@ -72,7 +72,6 @@ def is_milestone_edit(msg):
     count = msg['total_edits']
     if msg['action'] != 'edit':
         return False
-    if count > 0 and (count % 1000 == 0 or count in MILESTONE_EDITS):
         return True
     return False
 
@@ -168,6 +167,11 @@ class UserDailyInfo(object):
         return cls(username, qr['id'], reg_date,
                    qr['totalEdits'], qr['timeFrameEdits'])
 
+    def __repr__(self):
+        cn = self.__class__.__name__
+        return ('<%s username=%s total_edits=%s>' %
+                (cn, self.username, self.total_edits))
+
 
 class Barnsworth(object):
     def __init__(self, **kwargs):
@@ -219,12 +223,28 @@ class Barnsworth(object):
 
         # TODO: store action for activity batch service?
         # TODO: handle augmentation
+        self._augment_action_ctx(action_ctx)
         event_list = self._detect_events(action_ctx)
         for event in event_list:
             action_ctx.add_event(event)
             event_json = event.to_json()
             for addr, ws_client in self.ws_server.clients.iteritems():
                 ws_client.ws.send(event_json)
+        return
+
+    def _augment_action_ctx(self, action_ctx):
+        action = action_ctx.action
+        if action['is_anon']:
+            return  # TODO?
+        username = action['user']
+        rc = ransom.Client()
+        resp = rc.get(_USERDAILY_URL_TMPL % username)
+        try:
+            udc_dict = json.loads(resp.text)['userdailycontribs']
+        except KeyError:
+            return  # Log?
+        user_daily = UserDailyInfo.from_dict(username, udc_dict)
+        action_ctx.user_daily_info = user_daily
         return
 
     def _detect_events(self, action_ctx):
@@ -235,37 +255,20 @@ class Barnsworth(object):
         event_list = []
         for event_type in event_types:
             try:
-                event_list.append(event_type.from_action_context(action_ctx))
+                event = event_type.from_action_context(action_ctx)
+                event_list.append(event)
             except events.Uneventful as ue:
-                print 'event not applicable', ue
+                # probably not even log this
+                # Uneventful is uneventful for a reason
+                #print 'event not applicable: ', ue
+                pass
             except Exception as e:
                 print 'event exception', e
+            else:
+                print event
         return event_list
 
-
     def augment_message(self, msg_dict):
-        ret = []
-        msg_dict['is_wiki_birthday'] = False
-        msg_dict['wiki_age'] = 0
-        msg_dict['total_edits'] = 0
-        username = msg_dict['user']
-        if not msg_dict['is_anon']:
-            rc = ransom.Client()
-            resp = rc.get(_USERDAILY_URL_TMPL % username)
-            try:
-                udc_dict = json.loads(resp.text)['userdailycontribs']
-            except KeyError:
-                pass
-            user_daily = UserDailyInfo.from_dict(username, udc_dict)
-            if user_daily.reg_date:
-                today = datetime.date.today()
-                user_reg_date = user_daily.reg_date.date()
-                wiki_age = round((today - user_reg_date).days / 365.0, 2)
-                msg_dict['wiki_age'] = wiki_age
-                if today == user_reg_date:
-                    msg_dict['is_wiki_birthday'] = True
-            total_edits = user_daily.total_edits
-            msg_dict['total_edits'] = total_edits
         #if is_welcome(msg_dict):
         #    ret.append(EditEvent('welcome', username))
         #if is_new_large(msg_dict):
@@ -276,7 +279,7 @@ class Barnsworth(object):
         #    ret.append(EditEvent('milestone', username, total_edits))
         #if is_new_user(msg_dict):
         #    ret.append(EditEvent('newuser', username))
-        return ret
+        pass
 
     def _global_user_info_compare(self, msg_dict):
         if not msg_dict['is_anon']:

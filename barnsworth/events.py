@@ -82,4 +82,16 @@ class NewUser(Event):
 
 
 class NewUserWelcome(Event):
-    pass
+    def __init__(self, welcomer, recipient):
+        self.welcomer = welcomer
+        self.recipient = recipient
+
+    @classmethod
+    def from_action_context(cls, action_ctx):
+        action = action_ctx.action
+        namespace, summary = action['ns'], action['summary']
+        if namespace == 'User talk' and 'welcom' in summary.lower():
+            welcomer = action['username']
+            recipient = action['page_title'].partition('/')[0]
+            return cls(welcomer, recipient)
+        raise Uneventful('not a welcome: %s' % action['url'])

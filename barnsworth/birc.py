@@ -43,8 +43,8 @@ _USERDAILY_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=userdailycontri
 
 MILESTONE_EDITS = [1, 5, 10, 20, 50, 100, 200, 300, 500]
 
-
-EVENT_MAP = {'edit': [],  # events.MilestoneEdit, events.BirthdayEdit],
+# events.MilestoneEdit, events.BirthdayEdit],
+EVENT_MAP = {'edit': [events.NewUserWelcome],
              'block': [],
              'new_user': [],
              'create': [events.NewUser]}

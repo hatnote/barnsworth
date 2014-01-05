@@ -67,55 +67,6 @@ class ActionContext(object):
         self.events.append(event)
 
 
-# TODO: whats the best way to organize these?
-def is_milestone_edit(msg):
-    count = msg['total_edits']
-    if msg['action'] != 'edit':
-        return False
-        return True
-    return False
-
-
-def is_new_user(msg):
-    if msg['page_title'] != 'Special:Log/newusers':
-        return False
-    if msg['action'] != 'create':
-        return False
-    if msg['wiki_age'] < 1:
-        return False
-    return True
-
-
-def is_new_article(msg):
-    if not msg['is_new']:
-        return False
-    if msg['ns'] != 'Main':
-        return False
-    return True
-
-
-def is_new_large(msg):
-    if is_new_article(msg) or msg['change_size'] > 2000:
-        return True
-    return False
-
-
-def is_welcome(msg):
-    if not msg['is_new']:
-        return False
-    if msg['ns'] != 'User talk':
-        return False
-    if not 'welcome' in msg['summary'].lower():
-        return False
-    return True
-
-
-def is_wiki_birthday(msg):
-    if msg['is_wiki_birthday'] and msg['wiki_age'] > 0:
-        return True
-    return False
-
-
 def parse_timestamp(timestamp):
     return datetime.datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%SZ')
 
@@ -124,6 +75,8 @@ def parse_timestamp_nopunct(timestamp):
     return datetime.datetime.strptime(timestamp, '%Y%m%d%H%M%S')
 
 
+"""
+# only used to demonstrate issues with APIs
 class UserInfo(object):
     def __init__(self, username, user_id, reg_date, edit_count, home_wiki,
                  per_wiki_info=None):
@@ -142,6 +95,7 @@ class UserInfo(object):
             reg_date = parse_timestamp(reg_date)
         return cls(username, qr['id'], reg_date, qr['editcount'],
                    qr.get('home'), qr.get('merged'))
+"""
 
 
 class UserDailyInfo(object):
@@ -222,7 +176,6 @@ class Barnsworth(object):
             ws_client.ws.send(action_json)
 
         # TODO: store action for activity batch service?
-        # TODO: handle augmentation
         self._augment_action_ctx(action_ctx)
         event_list = self._detect_events(action_ctx)
         for event in event_list:
@@ -257,7 +210,7 @@ class Barnsworth(object):
             try:
                 event = event_type.from_action_context(action_ctx)
                 event_list.append(event)
-            except events.Uneventful as ue:
+            except events.Uneventful:
                 # probably not even log this
                 # Uneventful is uneventful for a reason
                 #print 'event not applicable: ', ue
@@ -267,20 +220,7 @@ class Barnsworth(object):
             else:
                 print event
         return event_list
-
-    def augment_message(self, msg_dict):
-        #if is_welcome(msg_dict):
-        #    ret.append(EditEvent('welcome', username))
-        #if is_new_large(msg_dict):
-        #    ret.append(EditEvent('newlargepage', username, msg_dict['page_title']))
-        #if is_wiki_birthday(msg_dict):
-        #    ret.append(EditEvent('birthday', username, msg_dict['wiki_age']))
-        #if is_milestone_edit(msg_dict):
-        #    ret.append(EditEvent('milestone', username, total_edits))
-        #if is_new_user(msg_dict):
-        #    ret.append(EditEvent('newuser', username))
-        pass
-
+    """
     def _global_user_info_compare(self, msg_dict):
         if not msg_dict['is_anon']:
             username = msg_dict['name']
@@ -299,7 +239,7 @@ class Barnsworth(object):
             timediff = user_info.reg_date - user_daily.reg_date
             print user_info.username, '(', user_info.home_wiki, '):', user_info.reg_date, '-', user_daily.reg_date, '=', timediff
         return msg_dict
-
+    """
     def _start_irc(self):
         self.irc_client.start()
 

@@ -1,21 +1,9 @@
 # -*- coding: utf-8 -*-
 
-import re
 import json
 import datetime
 
-_camel2under_re = re.compile('((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))')
-
-
-def camel2under(camel_string):
-    """
-    Converts a camelcased string to underscores. Useful for
-    turning a class name into a function name.
-
-    >>> camel2under('BasicParseTest')
-    'basic_parse_test'
-    """
-    return _camel2under_re.sub(r'_\1', camel_string).lower()
+from boltons.strutils import camel2under
 
 
 class Uneventful(ValueError):

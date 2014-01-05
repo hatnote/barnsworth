@@ -11,7 +11,8 @@
 * Filter by hashtag
 * Test (and fix if necessary) reconnection code
 * Handle nick already in use
-* extract/reconstruct URLs for uploads
+* Augmentor to extract/reconstruct URLs for uploads
+* Augmentor for geo info
 
 * OAuth endpoint
 * More logging (lithoxyl)

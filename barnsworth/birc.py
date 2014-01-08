@@ -20,7 +20,11 @@ import ransom
 
 
 import events
+from logger import BarnsworthLogger
 
+BLOG = BarnsworthLogger('barnsworth',
+                        min_level='info',
+                        enable_begin=False)
 
 DEBUG = False
 
@@ -145,7 +149,8 @@ class Barnsworth(object):
     def on_irc_connect(self, client, msg):
         # TODO: need another handler to register a join failure?
         for channel in self.irc_channels:
-            client.send_message(Join(channel))
+            with BLOG.critical('joining channel %s' % channel):
+                client.send_message(Join(channel))
 
     def on_message(self, client, msg):
         msg_content = ' '.join(msg.params[1:]).decode('utf-8')
@@ -156,7 +161,8 @@ class Barnsworth(object):
             # log
             return
         action_ctx = ActionContext(action_dict)
-        self.publish_activity(action_ctx)
+        with BLOG.debug('activity publish'):
+            self.publish_activity(action_ctx)
         return
 
     def publish_activity(self, action_ctx):
@@ -165,13 +171,17 @@ class Barnsworth(object):
             ws_client.ws.send(action_json)
 
         # TODO: store action for activity batch service?
-        self._augment_action_ctx(action_ctx)
-        event_list = self._detect_events(action_ctx)
+        with BLOG.info('action context augmentation'):
+            self._augment_action_ctx(action_ctx)
+        with BLOG.debug('event detection') as _r:
+            event_list = self._detect_events(action_ctx)
+            _r.success('detected %s events' % len(event_list))
         for event in event_list:
-            action_ctx.add_event(event)
-            event_json = event.to_json()
-            for addr, ws_client in self.ws_server.clients.iteritems():
-                ws_client.ws.send(event_json)
+            with BLOG.critical('publishing %r' % event.__class__.__name__):
+                action_ctx.add_event(event)
+                event_json = event.to_json()
+                for addr, ws_client in self.ws_server.clients.iteritems():
+                    ws_client.ws.send(event_json)
         return
 
     def _augment_action_ctx(self, action_ctx):
@@ -205,11 +215,8 @@ class Barnsworth(object):
                 # Uneventful is uneventful for a reason
                 #print 'event not applicable: ', ue
                 pass
-            except Exception as e:
-                # log this
-                print 'event exception', repr(e)
-            else:
-                print event
+            except Exception:
+                BLOG.critical('event detection error').exception()
         return event_list
 
     def _start_irc(self):
@@ -257,4 +264,7 @@ if DEBUG:
 barnsworth = BW = Barnsworth(defer_start=True)
 
 if __name__ == '__main__':
-    barnsworth.start()
+    try:
+        barnsworth.start()
+    finally:
+        print repr(BLOG.quantile_sink)

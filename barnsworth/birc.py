@@ -21,40 +21,26 @@ import ransom
 
 import events
 from logger import BarnsworthLogger
+from util import install_signal_handler
+
 
 BLOG = BarnsworthLogger('barnsworth',
                         min_level='info',
                         enable_begin=False)
 
-DEBUG = False
+DEFAULT_DEBUG = False
 
 DEFAULT_IRC_NICK = 'barnsworth'
-DEFAULT_IRC_SERVER = 'irc.wikimedia.org'
+DEFAULT_IRC_HOST = 'irc.wikimedia.org'
 DEFAULT_IRC_PORT = 6667
 DEFAULT_IRC_CHANNELS = ['en.wikipedia']
 
+DEFAULT_WS_PORT = 9000
 
 _JOIN_CODE = '001'
 
 _USERINFO_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=query&meta=globaluserinfo&guiuser=%s&guiprop=editcount|merged&format=json"
 _USERDAILY_URL_TMPL = u"http://en.wikipedia.org/w/api.php?action=userdailycontribs&user=%s&daysago=90&format=json"
-
-
-class UserInfoPool(object):
-    def __init__(self, max_size=1024):
-        self.cache = {}
-
-    def get_user_info(self, username):
-        try:
-            return self.cache[username]
-        except KeyError:
-            pass  # do API call
-
-    def add_action(self, username, action):
-        pass
-
-    def register_new_user(self, username):
-        pass
 
 
 EVENT_MAP = {'edit': [events.NewUserWelcome,
@@ -123,12 +109,12 @@ class UserDailyInfo(object):
 class Barnsworth(object):
     def __init__(self, **kwargs):
         self.irc_nick = kwargs.pop('irc_nick', DEFAULT_IRC_NICK)
-        self.irc_server = kwargs.pop('irc_server', DEFAULT_IRC_SERVER)
+        self.irc_host = kwargs.pop('irc_host', DEFAULT_IRC_HOST)
         self.irc_port = kwargs.pop('irc_port', DEFAULT_IRC_PORT)
         self.irc_channels = [x.strip('#') for x in
                              kwargs.pop('irc_channels', DEFAULT_IRC_CHANNELS)]
         # TODO: validate channel formatting?
-        self.irc_client = IRCClient(self.irc_server,
+        self.irc_client = IRCClient(self.irc_host,
                                     self.irc_nick,
                                     self.irc_port,
                                     reconnect=True)
@@ -136,7 +122,8 @@ class Barnsworth(object):
         self.irc_client.add_handler(self.on_irc_connect, _JOIN_CODE)
         self.irc_client.add_handler(self.on_message, 'PRIVMSG')
 
-        self.ws_server = WebSocketServer(('', 9000),  # TODO: config port
+        self.ws_port = kwargs.pop('ws_port', DEFAULT_WS_PORT)
+        self.ws_server = WebSocketServer(('', self.ws_port),
                                          Resource({'/': WebSocketApplication}))
         defer_start = kwargs.pop('defer_start', False)
         if not defer_start:
@@ -171,13 +158,15 @@ class Barnsworth(object):
             ws_client.ws.send(action_json)
 
         # TODO: store action for activity batch service?
-        with BLOG.info('action context augmentation'):
+        with BLOG.debug('action context augmentation') as r:
             self._augment_action_ctx(action_ctx)
-        with BLOG.debug('event detection') as _r:
+        with BLOG.debug('event detection') as r:
             event_list = self._detect_events(action_ctx)
-            _r.success('detected %s events' % len(event_list))
+            r.success('detected %s events' % len(event_list))
         for event in event_list:
-            with BLOG.critical('publishing %r' % event.__class__.__name__):
+            event_cn = event.__class__.__name__
+            with BLOG.critical('publishing %r' % event_cn) as r:
+                r.extras.update(event.to_dict())
                 action_ctx.add_event(event)
                 event_json = event.to_json()
                 for addr, ws_client in self.ws_server.clients.iteritems():
@@ -226,45 +215,45 @@ class Barnsworth(object):
         self.ws_server.serve_forever()
 
 
-_PDBed = False
-
-
-def signal_handler(signal, frame):
-    global _PDBed
-    if _PDBed:
-        return
-    _PDBed = True
-
-    gstacks = []
-    try:
-        import gc
-        import traceback
-        from greenlet import greenlet
-        for ob in gc.get_objects():
-            if isinstance(ob, greenlet):
-                gstacks.append(''.join(traceback.format_stack(ob.gr_frame)))
-    except Exception:
-        print "couldn't collect (all) greenlet stacks"
-    for i, gs in enumerate(gstacks):
-        print '==== Stack', i + 1, '===='
-        print gs
-        print '------------'
-
-    import pdb;pdb.set_trace()
-    _PDBed = False
-
-
-if DEBUG:
-    # NOTE: if this is enabled, you may have to use ctrl+z
-    # and run "kill %%" to terminate the process
-    import signal
-    signal.signal(signal.SIGINT, signal_handler)
-
-
 barnsworth = BW = Barnsworth(defer_start=True)
+
+
+def get_argparser():
+    from argparse import ArgumentParser
+    desc = "realtime broadcasting of Wikimedia project edits & events"
+    prs = ArgumentParser(description=desc)
+    prs.add_argument('--irc_host', default=DEFAULT_IRC_HOST)
+    prs.add_argument('--irc_channel', default='en.wikipedia')
+    prs.add_argument('--ws_port', default=DEFAULT_WS_PORT, type=int,
+                     help='listen port for websocket connections')
+    prs.add_argument('--debug', default=DEFAULT_DEBUG, action='store_true')
+    prs.add_argument('--loglevel', default='info',
+                     help='possible values: debug, info, critical')
+    return prs
+
+
+def main():
+    global barnsworth
+    global BLOG
+    global DEBUG
+
+    prs = get_argparser()
+    args = prs.parse_args()
+    DEBUG = args.debug
+    BLOG = BarnsworthLogger('barnsworth',
+                            min_level=args.loglevel,
+                            enable_begin=False)
+    barnsworth = Barnsworth(irc_channels=[args.irc_channel],
+                            irc_host=args.irc_host,
+                            ws_port=args.ws_port)
+
+    if DEBUG:
+        install_signal_handler()
+    barnsworth.start()
+
 
 if __name__ == '__main__':
     try:
-        barnsworth.start()
+        main()
     finally:
         print repr(BLOG.quantile_sink)

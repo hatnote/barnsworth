@@ -13,7 +13,7 @@ from lithoxyl.sinks import SensibleSink, QuantileSink
 # idea here is that any codified lessons learned here will be merged
 # into lithoxyl as one of the sane/sensible defaults.
 
-OUT_TMPL = '{status_char} {end_local_iso8601} {level_name}: {message} {duration_msecs} ms - {extras}'
+OUT_TMPL = '{status_char} {end_local_iso8601_noms_notz} {level_name}: {message} {duration_msecs} ms - {extras}'
 BEG_TMPL = '{status_char} {level_name}: {message}'
 
 

@@ -14,7 +14,7 @@ from geventirc.message import Join
 from geventirc.handlers import ping_handler
 
 sys.path.insert(0, '../../wikimon')  # or pip install wikimon, maybe
-from wikimon.parsers import parse_irc_message
+from wikimon import parsers
 
 import ransom
 
@@ -28,6 +28,7 @@ BLOG = BarnsworthLogger('barnsworth',
                         min_level='info',
                         enable_begin=False)
 
+DEBUG = False
 DEFAULT_DEBUG = False
 
 DEFAULT_IRC_NICK = 'barnsworth'
@@ -120,6 +121,7 @@ class Barnsworth(object):
                                     reconnect=True)
         self.irc_client.add_handler(ping_handler, 'PING')
         self.irc_client.add_handler(self.on_irc_connect, _JOIN_CODE)
+        self.irc_client.add_handler(self._on_irc)
         self.irc_client.add_handler(self.on_message, 'PRIVMSG')
 
         self.ws_port = kwargs.pop('ws_port', DEFAULT_WS_PORT)
@@ -133,6 +135,12 @@ class Barnsworth(object):
         self._start_irc()
         self._start_ws()
 
+    def _on_irc(self, client, msg):
+        if DEBUG:
+            msg_content = ' '.join(msg.params[1:]).decode('utf-8')
+            clean_msg = parsers.clean_irc_markup(msg_content)
+            BLOG.debug('irc message').success(clean_msg)
+
     def on_irc_connect(self, client, msg):
         # TODO: need another handler to register a join failure?
         for channel in self.irc_channels:
@@ -143,7 +151,7 @@ class Barnsworth(object):
         msg_content = ' '.join(msg.params[1:]).decode('utf-8')
         msg_content.replace(u'\x02', '')  # hmm, TODO
         try:
-            action_dict = parse_irc_message(msg_content)
+            action_dict = parsers.parse_irc_message(msg_content)
         except Exception as e:
             # log
             return
@@ -223,6 +231,7 @@ def get_argparser():
     desc = "realtime broadcasting of Wikimedia project edits & events"
     prs = ArgumentParser(description=desc)
     prs.add_argument('--irc_host', default=DEFAULT_IRC_HOST)
+    prs.add_argument('--irc_nick', default=DEFAULT_IRC_NICK)
     prs.add_argument('--irc_channel', default='en.wikipedia')
     prs.add_argument('--ws_port', default=DEFAULT_WS_PORT, type=int,
                      help='listen port for websocket connections')
@@ -240,15 +249,17 @@ def main():
     prs = get_argparser()
     args = prs.parse_args()
     DEBUG = args.debug
+    if DEBUG:
+        args.loglevel = 'debug'
+        install_signal_handler()
+
     BLOG = BarnsworthLogger('barnsworth',
                             min_level=args.loglevel,
                             enable_begin=False)
     barnsworth = Barnsworth(irc_channels=[args.irc_channel],
+                            irc_nick=args.irc_nick,
                             irc_host=args.irc_host,
                             ws_port=args.ws_port)
-
-    if DEBUG:
-        install_signal_handler()
     barnsworth.start()
 
 

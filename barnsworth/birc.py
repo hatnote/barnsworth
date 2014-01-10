@@ -264,7 +264,8 @@ def main():
 
 
 if __name__ == '__main__':
+    from pprint import pprint
     try:
         main()
     finally:
-        print repr(BLOG.quantile_sink)
+        pprint(BLOG.quantile_sink.to_dict())

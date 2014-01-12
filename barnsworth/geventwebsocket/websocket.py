@@ -294,7 +294,8 @@ class WebSocket(object):
         Read and return a message from the stream. If `None` is returned, then
         the socket is considered closed/errored.
         """
-
+        # wtf 4: this `current_app` reacharound is so bad that it forced
+        # Robin Thicke to start playing in my head.
         if self.closed:
             self.current_app.on_close(MSG_ALREADY_CLOSED)
             raise WebSocketError(MSG_ALREADY_CLOSED)

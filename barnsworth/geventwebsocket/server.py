@@ -14,7 +14,6 @@ class WebSocketServer(WSGIServer):
 
     def __init__(self, *args, **kwargs):
         self.debug = kwargs.pop('debug', False)
-        self.pre_start_hook = kwargs.pop('pre_start_hook', None)
         self._logger = None
         self.clients = {}
 
@@ -22,6 +21,7 @@ class WebSocketServer(WSGIServer):
         super(WebSocketServer, self).__init__(*args, **kwargs)
 
     def handle(self, socket, address):
+        # wtf 3: this is exactly what's in gevent's pywsgi
         handler = self.handler_class(socket, address, self)
         handler.handle()
 

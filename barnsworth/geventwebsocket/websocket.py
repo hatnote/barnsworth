@@ -158,8 +158,8 @@ class WebSocket(object):
             return
 
         if len(payload) < 2:
-            raise ProtocolError('Invalid close frame: {0} {1}'.format(
-                header, payload))
+            raise ProtocolError('Invalid close frame: %s %s' % (header,
+                                                                payload))
 
         code = struct.unpack('!H', str(payload[:2]))[0]
         payload = payload[2:]
@@ -172,7 +172,7 @@ class WebSocket(object):
                 raise UnicodeError
 
         if not self._is_valid_close_code(code):
-            raise ProtocolError('Invalid close code {0}'.format(code))
+            raise ProtocolError('Invalid close code %s' % code)
 
         self.close(code, payload)
 
@@ -223,7 +223,7 @@ class WebSocket(object):
         if not self.utf8validate_last[0]:
             raise UnicodeError("Encountered invalid UTF-8 while processing "
                                "text message at payload octet index "
-                               "{0:d}".format(self.utf8validate_last[3]))
+                               "%d" % self.utf8validate_last[3])
 
     def read_message(self):
         """
@@ -244,7 +244,7 @@ class WebSocket(object):
                 if opcode:
                     raise ProtocolError("The opcode in non-fin frame is "
                                         "expected to be zero, got "
-                                        "{0!r}".format(f_opcode))
+                                        "%r" % f_opcode)
 
                 # Start reading a new message, reset the validator
                 self.utf8validator.reset()
@@ -269,7 +269,7 @@ class WebSocket(object):
                 return
 
             else:
-                raise ProtocolError("Unexpected opcode={0!r}".format(f_opcode))
+                raise ProtocolError("Unexpected opcode=%r" % f_opcode)
 
             if opcode == self.OPCODE_TEXT:
                 self.validate_utf8(payload)
@@ -424,9 +424,8 @@ class Header(object):
     unmask_payload = mask_payload
 
     def __repr__(self):
-        return ("<Header fin={0} opcode={1} length={2} flags={3} at "
-                "0x{4:x}>").format(self.fin, self.opcode, self.length,
-                                   self.flags, id(self))
+        return ("<Header fin=%s opcode=%s length=%s flags=%s at 0x%s>"
+                % (self.fin, self.opcode, self.length, self.flags, id(self)))
 
     @classmethod
     def decode_header(cls, stream):
@@ -454,14 +453,13 @@ class Header(object):
 
         if header.opcode > 0x07:
             if not header.fin:
-                raise ProtocolError(
-                    "Received fragmented control frame: {0!r}".format(data))
+                raise ProtocolError("Received fragmented control frame: %r"
+                                    % data)
 
             # Control frames MUST have a payload length of 125 bytes or less
             if header.length > 125:
                 raise FrameTooLargeException(
-                    "Control frame cannot be larger than 125 bytes: "
-                    "{0!r}".format(data))
+                    "Control frame cannot be larger than 125 bytes: %r" % data)
 
         if header.length == 126:
             # 16 bit length

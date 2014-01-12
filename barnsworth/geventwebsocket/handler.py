@@ -1,6 +1,5 @@
 import base64
 import hashlib
-import warnings
 
 from gevent.pywsgi import WSGIHandler
 from .websocket import WebSocket, Stream
@@ -14,20 +13,6 @@ class Client(object):
 
 
 class WebSocketHandler(WSGIHandler):
-    """
-    Automatically upgrades the connection to a websocket.
-
-    To prevent the WebSocketHandler to call the underlying WSGI application,
-    but only setup the WebSocket negotiations, do:
-
-      mywebsockethandler.prevent_wsgi_call = True
-
-    before calling run_application().  This is useful if you want to do more
-    things before calling the app, and want to off-load the WebSocket
-    negotiations to this library.  Socket.IO needs this for example, to send
-    the 'ack' before yielding the control to your WSGI app.
-    """
-
     SUPPORTED_VERSIONS = ('13', '8', '7')
     GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
@@ -120,13 +105,13 @@ class WebSocketHandler(WSGIHandler):
         try:
             key_len = len(base64.b64decode(key))
         except TypeError:
-            msg = "Invalid key: {0}".format(key)
+            msg = "Invalid key: %r" % key
             self.start_response('400 Bad Request', [])
             return [msg]
 
         if key_len != 16:
             # 5.2.1 (3)
-            msg = "Invalid key: {0}".format(key)
+            msg = "Invalid key: %r" % key
             self.start_response('400 Bad Request', [])
             return [msg]
 

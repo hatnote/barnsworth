@@ -22,7 +22,7 @@ def get_version(version=None):
     if version[3] == 'alpha' and version[4] == 0:
         hg_changeset = get_hg_changeset()
         if hg_changeset:
-            sub = '.dev{0}'.format(hg_changeset)
+            sub = '.dev%s' % hg_changeset
 
     elif version[3] != 'final':
         mapping = {'alpha': 'a', 'beta': 'b', 'rc': 'c'}

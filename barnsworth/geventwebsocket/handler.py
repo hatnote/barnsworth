@@ -5,11 +5,70 @@ from gevent.pywsgi import WSGIHandler
 from .websocket import WebSocket, Stream
 from .logging import LOG
 
+from clastic.errors import BadRequest, UpgradeRequired
+
+
+class InvalidWebSocketRequest(BadRequest):
+    pass
+
 
 class Client(object):
     def __init__(self, address, ws):
         self.address = address
         self.ws = ws
+
+
+class WebSocketFactory(object):
+    SUPPORTED_VERSIONS = ('13', '8', '7')
+    GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+    def __init__(self, protocols=None):
+        self.protocols = protocols or []
+
+    def _validate_request(self, request):
+        IWSR = InvalidWebSocketRequest
+        if request.method != 'GET':
+            msg = 'WebSockets expect GET HTTP method, not %s' % request.method
+            raise IWSR(msg)
+        # HTTP/1.1 check probably redundant given the following
+        environ = request.environ
+        upgrade = environ.get('HTTP_UPGRADE', '').lower()
+        if upgrade != 'websocket':
+            raise IWSR('WebSockets expect header: "Http-Upgrade: websocket"')
+        http_conn = environ.get('HTTP_CONNECTION', '').lower()
+        if 'upgrade' not in http_conn:
+            raise IWSR('WebSockets expect Http-Connection: upgrade')
+        ws_version = environ.get('HTTP_SEC_WEBSOCKET_VERSION')
+        if not ws_version:
+            raise UpgradeRequired()  # TODO: supported versions header
+        elif ws_version not in self.SUPPORTED_VERSIONS:
+            raise IWSR('unsupported WebSocket version: %r' % ws_version)
+        key = environ.get('HTTP_SEC_WEBSOCKET_KEY', '').strip()
+        if not key:
+            raise IWSR('expected Sec-WebSocket-Key header')
+        try:
+            key_len = len(base64.b64decode(key))
+        except:
+            raise IWSR('could not decode WebSocket key: %r' % key)
+        if key_len != 16:
+            raise IWSR('invalid WebSocket key length for key: %r' % key)
+        return True
+
+    def is_websocket_request(self, request):
+        try:
+            self._validate_request(request)
+        except BadRequest:
+            return False
+        return True
+
+    def get_websocket(self, request):
+        self._validate_request(request)
+        environ = request.environ
+        protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', '')
+        if self.protocols and protocol not in self.protocols:
+            # TODO
+            pass
+        pass
 
 
 class WebSocketHandler(WSGIHandler):
@@ -67,7 +126,7 @@ class WebSocketHandler(WSGIHandler):
             return
 
         if self.request_version != 'HTTP/1.1':
-            self.start_response('402 Bad Request', [])
+            self.start_response('402 Bad Request', [])  # wtf 402 Payment Required?
             LOG.debug('HTTP version check').failure('needs HTTP/1.1, not {}',
                                                     self.request_version)
             return ['websockets requires an HTTP/1.1 client']

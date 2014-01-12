@@ -168,7 +168,3 @@ class WebSocketHandler(WSGIHandler):
             del self.server.clients[self.client_address]
             if not self.websocket.closed:
                 self.websocket.close()
-
-    @property
-    def active_client(self):
-        return self.server.clients[self.client_address]

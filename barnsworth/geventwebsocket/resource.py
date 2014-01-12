@@ -23,7 +23,7 @@ class WebSocketApplication(object):
             #self.protocol.on_message(message)  # wtf 1
 
     def on_open(self, *args, **kwargs):
-        import pdb;pdb.set_trace()
+        pass
 
     def on_close(self, *args, **kwargs):
         pass

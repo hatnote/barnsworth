@@ -6,6 +6,9 @@ import datetime
 
 from gevent import monkey
 monkey.patch_socket()
+
+from logger import BarnsworthLogger
+
 from geventwebsocket import (WebSocketServer,
                              WebSocketApplication,
                              Resource)
@@ -20,7 +23,6 @@ import ransom
 
 
 import events
-from logger import BarnsworthLogger
 from util import install_signal_handler
 
 

@@ -291,7 +291,7 @@ class WebSocket(object):
         try:
             self.send_frame(message, opcode)
         except WebSocketError:
-            self.current_app.on_close(MSG_SOCKET_DEAD)
+            "self.current_app.on_close(MSG_SOCKET_DEAD)"
             raise WebSocketError(MSG_SOCKET_DEAD)
 
     def close(self, code=1000, message=''):

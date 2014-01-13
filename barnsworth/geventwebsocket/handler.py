@@ -108,6 +108,18 @@ class WebSocketResponse(BaseResponse):
     #    app_iter, status, headers = self.get_wsgi_response
 
 
+def ws_loop(websocket):
+    while websocket.ok:
+        websocket.lol()
+    return
+
+
+def ws_endpoint(ws_factory):
+    websocket = ws_factory.initiate()
+    return websocket.get_response()
+
+
+
 class WebSocketHandler(WSGIHandler):
     SUPPORTED_VERSIONS = ('13', '8', '7')
     GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"

@@ -5,6 +5,7 @@ from gevent.pywsgi import WSGIHandler
 from .websocket import WebSocket, Stream
 from .logging import LOG
 
+from clastic import BaseResponse
 from clastic.errors import BadRequest, UpgradeRequired
 
 
@@ -27,11 +28,11 @@ class WebSocketFactory(object):
 
     def _validate_request(self, request):
         IWSR = InvalidWebSocketRequest
-        if request.method != 'GET':
-            msg = 'WebSockets expect GET HTTP method, not %s' % request.method
-            raise IWSR(msg)
+        environ, method = request.environ, request.method
+        if method != 'GET':
+            raise IWSR('WebSockets expect GET HTTP method, not %s' % method)
         # HTTP/1.1 check probably redundant given the following
-        environ = request.environ
+
         upgrade = environ.get('HTTP_UPGRADE', '').lower()
         if upgrade != 'websocket':
             raise IWSR('WebSockets expect header: "Http-Upgrade: websocket"')
@@ -64,11 +65,47 @@ class WebSocketFactory(object):
     def get_websocket(self, request):
         self._validate_request(request)
         environ = request.environ
+        key = environ.get('HTTP_SEC_WEBSOCKET_KEY', '').strip()
         protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', '')
         if self.protocols and protocol not in self.protocols:
             # TODO
             pass
-        pass
+        stream = WebSocketStream.from_request(request)
+        websocket = WebSocket(environ, stream)
+        return WebSocketResponse(key, protocol)
+
+    def _run_websocket(self):
+        "hm"
+
+
+class WebSocketStream(object):
+    __slots__ = ('read', 'write')
+
+    def __init__(self, read, write):
+        self.read = read  # handler.rfile.read
+        self.write = write  # handler.socket.sendall
+
+    @classmethod
+    def from_request(cls, request):
+        return cls(request.input_stream,
+                   request.environ['wsgi.socket'])  # TODO
+
+
+class WebSocketResponse(BaseResponse):
+    def __init__(self, key, protocol=None):
+        accept_token = base64.b64encode(hashlib.sha1(key + self.GUID).digest())
+        headers = [("Upgrade", "websocket"),
+                   ("Connection", "Upgrade"),
+                   ("Sec-WebSocket-Accept", accept_token)]
+        if protocol:  # hm
+            headers.append(("Sec-WebSocket-Protocol", protocol))
+        super(WebSocketResponse, self).__init__('Switching Protocols',
+                                                status=101,
+                                                headers=headers)
+
+    #def __call__(self, environ, start_response):
+    #    # TODO: might be better to override get_app_iter()
+    #    app_iter, status, headers = self.get_wsgi_response
 
 
 class WebSocketHandler(WSGIHandler):
@@ -80,6 +117,7 @@ class WebSocketHandler(WSGIHandler):
 
         if hasattr(self, 'websocket'):
             if self.status and not self.headers_sent:
+                # causes pywsgi to send headers
                 self.write('')
 
             self.run_websocket()

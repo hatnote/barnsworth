@@ -43,7 +43,6 @@ class WebSocket(object):
         self.raw_read = stream.read
 
         self.utf8validator = Utf8Validator()
-        self.handler = handler
 
     def __del__(self):
         try:
@@ -104,18 +103,6 @@ class WebSocket(object):
             return False
 
         return True
-
-    @property
-    def current_app(self):
-        if hasattr(self.handler.server.application, 'current_app'):
-            return self.handler.server.application.current_app
-        else:
-            # For backwards compatibility reasons
-            class MockApp():
-                def on_close(self, *args):
-                    pass
-
-            return MockApp()
 
     @property
     def origin(self):
